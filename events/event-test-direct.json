@@ -1,0 +1,7 @@
+{
+    "test": "direct invocation",
+    "data": {
+        "email": "test@example.com",
+        "message": "Hello from direct invocation"
+    }
+} 
