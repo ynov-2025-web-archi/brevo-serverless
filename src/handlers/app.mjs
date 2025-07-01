@@ -1,45 +1,70 @@
-export const transactionalEmailHandler = async (event) => {
-    // All log statements are written to CloudWatch
-    console.info('received:', event);
 
-    // Check if this is an API Gateway event
-    if (event.httpMethod) {
-        if (event.httpMethod !== 'POST') {
-            throw new Error(`postMethod only accepts POST method, you tried: ${event.httpMethod} method.`);
-        }
-    } else {
-        console.log('No httpMethod found in event, treating as direct invocation');
+export const transactionalEmailHandler = async (event) => {
+
+    console.info('Received event:', JSON.stringify(event));
+
+    // Vérification de la méthode HTTP
+    if (event.httpMethod && event.httpMethod !== 'POST') {
+        return {
+            statusCode: 405,
+            body: JSON.stringify({ error: `Method ${event.httpMethod} not allowed. Use POST.` }),
+        };
+    }
+   
+    let email = event.email;
+
+    console.log('Email:', email);
+    console.log('Event body:', event.body);
+
+    if (!email) {
+        return {
+            statusCode: 400,
+            body: JSON.stringify({ error: 'Missing "email" in request.' }),
+        };
     }
 
-    // Get body from the event
-    let body;
-    if (event.body) {
-        // If body is a string, parse it
-        if (typeof event.body === 'string') {
-            body = JSON.parse(event.body);
-        } else {
-            // If body is already an object
-            body = event.body;
-        }
-    } else {
-        // If no body, use the event itself as the data
-        body = event;
+    // BODY de la requête
+    const emailData = {  
+        sender:{  
+           email:"dev@zelabstudio.com",
+        },
+        to:[  
+           {  
+              email:email,
+           }
+        ],
+        subject:"Hello world",
+        htmlContent:"<html><head></head><body><p>Hello,</p>This is my first transactional email sent from Brevo.</p></body></html>"
     }
     
-    console.log('body:', body);
-
     try {
-        console.log("Success", body);
-      } catch (err) {
-        console.log("Error", err.stack);
-      }
-
-    const response = {
-        statusCode: 200,
-        body: JSON.stringify(body)
-    };
-
-    // All log statements are written to CloudWatch
-    console.info(`response from: ${event.path || 'direct invocation'} statusCode: ${response.statusCode} body: ${response.body}`);
-    return response;
+        const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': process.env.BREVO_API_KEY,
+            },
+            body: JSON.stringify(emailData),
+        });
+    
+        if(!response.ok) {
+            throw new Error("Brevo API error", response.message);
+        }
+    
+        const data = await response.json();
+    
+        console.log('Brevo API response:', data);
+    
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ message: 'Email sent successfully' }),
+        }
+    }
+    catch (error) {
+        console.error('Error sending email:', error);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: 'Failed to send email', details: error.message }),
+        };
+    }
 };
